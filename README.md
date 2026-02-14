@@ -1,0 +1,1 @@
+# AlexKos_yougile_automation_diplom
