@@ -1,86 +1,71 @@
 import pytest
 import allure
 import time
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import configuration as config
+from pages.main_page import YouGilePage
+
 
 @allure.epic("YouGile UI Automation")
-@allure.feature("Работа с задачами")
+@allure.feature("Атомарные тесты задач")
 class TestYouGileUI:
 
-    @allure.id("UI-LOGIN")
-    @allure.title("Авторизация в системе")
+    @pytest.fixture(autouse=True)
+    def setup_page(self, browser):
+        """Фикстура для инициализации страницы и авторизации."""
+        self.page = YouGilePage(browser)
+        # Проверяем авторизацию: если мы не на доске, логинимся
+        if "yougile.com" not in browser.current_url:
+            with allure.step("Первичная авторизация"):
+                # ИЗМЕНЕНО: Добавлен config.BASE_URL_UI первым аргументом
+                self.page.login_manual(
+                    config.BASE_URL_UI,
+                    config.LOGIN,
+                    config.PASSWORD
+                )
+        else:
+            with allure.step("Сброс состояния страницы перед новым тестом"):
+                browser.refresh()
+                time.sleep(5)
+
+    @pytest.fixture
+    def task_factory(self):
+        """Фикстура-фабрика для создания задачи перед тестом."""
+        def _create(name_prefix: str) -> str:
+            task_name = f"{name_prefix}_{int(time.time())}"
+            self.page.create_task_visual(config.PROJECT_NAME, task_name)
+            return task_name
+        return _create
+
+    @allure.title("UI: Создание задачи")
     @pytest.mark.ui
-    def test_login(self, browser):
-        with allure.step("Открыть страницу авторизации"):
-            # ПРЯМОЙ ПУТЬ к форме, чтобы не кликать лишний раз по лендингу
-            browser.get("https://ru.yougile.com/team/")
-        
-        # Ожидание до 30 секунд (YouGile подгружает форму не сразу)
-        wait = WebDriverWait(browser, 30)
+    def test_create_task(self):
+        task_name = f"Create_{int(time.time())}"
+        self.page.create_task_visual(config.PROJECT_NAME, task_name)
+        self.page.check_task_exists(task_name)
 
-        with allure.step("Ввести учетные данные"):
-            # Ждем и вводим логин
-            login_field = wait.until(EC.visibility_of_element_located(
-                (By.CSS_SELECTOR, "input[name='login'], input[type='email']")
-            ))
-            login_field.clear()
-            login_field.send_keys(config.LOGIN)
-            
-            # ВАЖНО: Ждем, когда поле пароля станет доступным, и только потом вводим
-            pass_field = wait.until(EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, "input[name='password'], input[type='password']")
-            ))
-            pass_field.clear()
-            pass_field.send_keys(config.PASSWORD)
-            
-            # Маленькая пауза перед нажатием Enter, чтобы YouGile "увидел" текст
-            time.sleep(1)
-            pass_field.send_keys(Keys.ENTER)
-            # Даем системе 5-7 секунд на смену URL и прогрузку профиля
-            time.sleep(7)
-
-    @allure.id("df206b81-8b84-494a-ba9f-8de6dc4ac8c6")
-    @allure.title("Создание задачи через интерфейс")
+    @allure.title("UI: Отправка сообщения")
     @pytest.mark.ui
-    def test_create_task_ui(self, browser):
-        # 1. Сначала проходим авторизацию
-        self.test_login(browser)
-        
-        wait = WebDriverWait(browser, 40)
-        
-        with allure.step("Перейти на тестовую доску"):
-            # Используем твою проверенную длинную ссылку
-            target_url = "https://ru.yougile.com/team/8dfa078b5e52/%D0%94%D0%B8%D0%BF%D0%BB%D0%BE%D0%BC%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82_15.02/%D0%94%D0%B8%D0%BF%D0%BB%D0%BE%D0%BC"
-            browser.get(target_url)
-            
-            # Ждем прогрузки тяжелой доски
-            time.sleep(10)
-            # Кликаем в body, чтобы сбросить возможные подсказки и фокус
-            try:
-                browser.find_element(By.TAG_NAME, "body").click()
-            except:
-                pass
+    def test_send_message(self, task_factory):
+        task_name = task_factory("Chat")
+        self.page.send_message(task_name, "Привет от автотеста!")
 
-        with allure.step("Нажать кнопку создания задачи"):
-            # Ищем кнопку именно в первой колонке "В работе"
-            # Селектор [data-id] или текст поможет не промахнуться
-            add_btn = wait.until(EC.element_to_be_clickable(
-                (By.XPATH, "//div/parent::div//div")
-            ))
-            # Кликаем через JS, чтобы обойти любые прозрачные слои
-            browser.execute_script("arguments[0].click();", add_btn)
-            
-        with allure.step("Ввести название и сохранить"):
-            # Ждем появления поля ввода (в YouGile это часто textarea)
-            input_area = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "textarea, .task-add-textarea")))
-            input_area.send_keys("Задача от робота UI")
-            time.sleep(1)
-            input_area.send_keys(Keys.ENTER)
+    @allure.title("UI: Смена цвета задачи")
+    @pytest.mark.ui
+    def test_change_task_color(self, task_factory):
+        task_name = task_factory("Color")
+        self.page.change_task_color(task_name)
+        # Проверка внутри метода change_task_color уже есть
 
-        with allure.step("Проверить появление задачи"):
-            # Ищем нашу новую задачу на доске
-            assert wait.until(EC.presence_of_element_located((By.XPATH, "//*")))
+    @allure.title("UI: Переименование задачи")
+    @pytest.mark.ui
+    def test_rename_task(self, task_factory):
+        task_name = task_factory("Rename")
+        new_name = f"UPD_{task_name}"
+        self.page.rename_task_via_pencil(task_name, new_name)
+        self.page.check_task_exists(new_name)
+
+    @allure.title("UI: Удаление задачи")
+    @pytest.mark.ui
+    def test_delete_task(self, task_factory):
+        task_name = task_factory("Delete")
+        self.page.delete_task_direct(task_name)

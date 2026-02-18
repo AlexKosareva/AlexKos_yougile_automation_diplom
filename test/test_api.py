@@ -3,6 +3,7 @@ import pytest
 import allure
 import configuration as config
 
+
 @allure.epic("YouGile API Automation")
 @allure.feature("Задачи и колонки")
 class TestYouGileAPI:
@@ -19,10 +20,11 @@ class TestYouGileAPI:
             "title": "Автотест: Колонка",
             "boardId": config.BOARD_ID
         }
-        
+
         with allure.step("Отправить POST запрос на создание колонки"):
-            resp = requests.post(f"{config.BASE_URL_API}columns", json=body, headers=headers)
-        
+            url = f"{config.BASE_URL_API}columns"
+            resp = requests.post(url, json=body, headers=headers)
+
         with allure.step("Проверить, что статус-код 201"):
             # Если падает с 404, выведем текст ошибки для диагностики
             assert resp.status_code == 201, f"Ошибка: {resp.text}"
@@ -39,10 +41,11 @@ class TestYouGileAPI:
             "title": "Задача из автотеста",
             "columnId": config.COLUMN_ID
         }
-        
+
         with allure.step("Отправить POST запрос на создание задачи"):
-            resp = requests.post(f"{config.BASE_URL_API}tasks", json=body, headers=headers)
-        
+            url = f"{config.BASE_URL_API}tasks"
+            resp = requests.post(url, json=body, headers=headers)
+
         with allure.step("Проверить статус-код 201"):
             assert resp.status_code == 201, f"Ошибка: {resp.text}"
 
@@ -52,13 +55,14 @@ class TestYouGileAPI:
     def test_get_tasks_list(self):
         headers = {"Authorization": f"Bearer {config.TOKEN}"}
         params = {"columnId": config.COLUMN_ID}
-        
+
         with allure.step("Отправить GET запрос на получение списка задач"):
-            resp = requests.get(f"{config.BASE_URL_API}tasks", headers=headers, params=params)
-        
+            url = f"{config.BASE_URL_API}tasks"
+            resp = requests.get(url, headers=headers, params=params)
+
         with allure.step("Проверить статус-код 200"):
             assert resp.status_code == 200
-        
+
         with allure.step("Проверить формат ответа"):
             assert isinstance(resp.json().get("content"), list)
 
@@ -74,10 +78,11 @@ class TestYouGileAPI:
             "title": "Fail Task",
             "columnId": "00000000-0000-0000-0000-000000000000"
         }
-        
+
         with allure.step("Отправить запрос с несуществующим columnId"):
-            resp = requests.post(f"{config.BASE_URL_API}tasks", json=body, headers=headers)
-        
+            url = f"{config.BASE_URL_API}tasks"
+            resp = requests.post(url, json=body, headers=headers)
+
         with allure.step("Проверить, что сервер вернул ошибку 400 или 404"):
             # YouGile может вернуть 404 если объект не найден в БД
             assert resp.status_code in [400, 404]
@@ -87,9 +92,10 @@ class TestYouGileAPI:
     @pytest.mark.api
     def test_get_task_invalid_id(self):
         headers = {"Authorization": f"Bearer {config.TOKEN}"}
-        
+
         with allure.step("Отправить GET запрос с невалидным ID"):
-            resp = requests.get(f"{config.BASE_URL_API}tasks/invalid-id-format", headers=headers)
-        
+            url = f"{config.BASE_URL_API}tasks/invalid-id-format"
+            resp = requests.get(url, headers=headers)
+
         with allure.step("Проверить наличие кода ошибки"):
             assert resp.status_code >= 400
